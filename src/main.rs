@@ -6,6 +6,7 @@ use crossterm::{
 };
 use serde::{Deserialize, Serialize};
 use std::io::{self, stdout};
+use std::fmt;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Todo {
@@ -93,6 +94,21 @@ impl Todo {
     }
 }
 
+impl fmt::Display for Todo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} | {} | {}",
+            self.id,
+            self.title,
+            if self.completed {
+                style("Done").green().to_string()
+            } else {
+                style("To do").red().to_string()
+            }
+        )
+    }
+}
 fn edit_todo(app: &mut AppState, id: u64) -> Option<&Todo> {
     let mut input = String::new();
     io::stdin()
