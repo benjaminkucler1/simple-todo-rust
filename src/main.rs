@@ -5,16 +5,17 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use serde::{Deserialize, Serialize};
-use std::io::{self, stdout};
+use std::{fs, io::{self, stdout}};
 use std::fmt;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Todo {
     id: u64,
     title: String,
     completed: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 struct AppState {
     next_id: u64,
     todos: Vec<Todo>,
@@ -27,6 +28,12 @@ impl AppState {
             todos: Vec::new(),
         }
     }
+
+    pub fn from_file(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let app = load_todos(filename)?;
+        Ok(app)
+    }
+
     pub fn todos(&self) -> &[Todo] {
         &self.todos
     }
@@ -162,12 +169,36 @@ fn clear_screen() {
     execute!(stdout(), Clear(ClearType::All), MoveTo(0, 0)).unwrap();
 }
 
-fn init() -> AppState {
-    AppState::new(0)
+fn init(filename: Option<&str>) -> AppState {
+    match filename {
+        Some(f) => return AppState::from_file(f).expect("ups"),
+        None => return AppState::new(0)
+    }
+}
+
+fn save_todos(app: &AppState, filepath: &str) -> Result<(), Box<dyn std::error::Error>>{
+    let content  = serde_json::to_string_pretty(&app)?;
+    fs::write(filepath, content)?;
+    Ok(())
+}
+
+fn load_todos(filename: &str) -> Result<AppState, Box<dyn std::error::Error>>{
+    match fs::read_to_string(filename){
+        Ok(content) if content.trim().is_empty() => Ok(AppState { next_id: 0, todos: Vec::new() }),
+        Ok(content) =>{
+            let app: AppState = serde_json::from_str(&content)?;
+            Ok(app)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(AppState { next_id: 0, todos: Vec::new() }),
+        Err(e) => Err(Box::new(e)),
+    }
 }
 
 fn main() {
-    let mut app: AppState = init();
+
+    let filepath = "todos.json";
+
+    let mut app: AppState = init(Some(&filepath));
 
     let mut input = String::new();
     print_help();
@@ -248,7 +279,9 @@ fn main() {
                     }
                 }
             }
-            "quit" | "q" => break,
+            "quit" | "q" => {
+                save_todos(&app, &filepath).expect("Ups 1");
+                break},
             "clear" | "cls" => clear_screen(),
             "help" | "h" | _ => print_help(),
         }
