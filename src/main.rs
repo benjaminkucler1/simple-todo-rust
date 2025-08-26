@@ -29,7 +29,7 @@ impl AppState {
         }
     }
 
-    pub fn from_file(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_file(filename: &str) -> Result<Self, AppError> {
         let app = load_todos(filename)?;
         Ok(app)
     }
@@ -84,18 +84,6 @@ impl Todo {
         self.completed = true;
     }
 
-    pub fn print(&self) {
-        println!(
-            "{} | {} | {}",
-            self.id,
-            self.title,
-            if self.completed {
-                style("Done").green()
-            } else {
-                style("To do").red()
-            }
-        );
-    }
     pub fn edit(&mut self, new_title: &str) {
         self.title = String::from(new_title);
     }
@@ -116,6 +104,24 @@ impl fmt::Display for Todo {
         )
     }
 }
+#[derive(Debug)]
+enum AppError{
+    Io(std::io::Error),
+    Json(serde_json::Error),
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(err: std::io::Error) -> Self {
+        AppError::Io(err)
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::Json(err)
+    }
+}
+
 fn edit_todo(app: &mut AppState, id: u64) -> Option<&Todo> {
     let mut input = String::new();
     io::stdin()
@@ -159,7 +165,7 @@ fn list_todos(todos: &[Todo]) {
     println!("----->Todos<-----");
     println!("Count: {}", todos.len());
     for todo in todos.iter() {
-        todo.print();
+        println!("{todo}");
     }
     println!("-----------------");
 }
@@ -176,21 +182,21 @@ fn init(filename: Option<&str>) -> AppState {
     }
 }
 
-fn save_todos(app: &AppState, filepath: &str) -> Result<(), Box<dyn std::error::Error>>{
+fn save_todos(app: &AppState, filepath: &str) -> Result<(), AppError>{
     let content  = serde_json::to_string_pretty(&app)?;
     fs::write(filepath, content)?;
     Ok(())
 }
 
-fn load_todos(filename: &str) -> Result<AppState, Box<dyn std::error::Error>>{
+fn load_todos(filename: &str) -> Result<AppState, AppError>{
     match fs::read_to_string(filename){
         Ok(content) if content.trim().is_empty() => Ok(AppState { next_id: 0, todos: Vec::new() }),
         Ok(content) =>{
             let app: AppState = serde_json::from_str(&content)?;
             Ok(app)
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(AppState { next_id: 0, todos: Vec::new() }),
-        Err(e) => Err(Box::new(e)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(AppState { next_id: 0, todos: Vec::new() }),
+        Err(err) => Err(AppError::Io(err)),
     }
 }
 
@@ -220,7 +226,7 @@ fn main() {
                 if let Some(id_str) = s.strip_prefix("complete ") {
                     if let Ok(id) = id_str.parse::<u64>() {
                         match app.complete_todo(id) {
-                            Some(todo) => todo.print(),
+                            Some(todo) => println!("{todo}"),
                             None => println!("Todo not found!"),
                         }
                     }
@@ -231,7 +237,7 @@ fn main() {
                 if let Some(id_str) = s.strip_prefix("c ") {
                     if let Ok(id) = id_str.parse::<u64>() {
                         match app.complete_todo(id) {
-                            Some(todo) => todo.print(),
+                            Some(todo) => println!("{todo}"),
                             None => println!("Todo not found!"),
                         }
                     }
@@ -242,7 +248,7 @@ fn main() {
                 if let Some(id_str) = s.strip_prefix("edit ") {
                     if let Ok(id) = id_str.parse::<u64>() {
                         match edit_todo(&mut app, id) {
-                            Some(todo) => todo.print(),
+                            Some(todo) => println!("{todo}"),
                             None => println!("Todo not found!"),
                         }
                     }
@@ -252,7 +258,7 @@ fn main() {
                 if let Some(id_str) = s.strip_prefix("e ") {
                     if let Ok(id) = id_str.parse::<u64>() {
                         match edit_todo(&mut app, id) {
-                            Some(todo) => todo.print(),
+                            Some(todo) => println!("{todo}"),
                             None => println!("Todo not found!"),
                         }
                     }
@@ -263,7 +269,7 @@ fn main() {
                 if let Some(id_str) = s.strip_prefix("delete ") {
                     if let Ok(id) = id_str.parse::<u64>() {
                         match app.delete_todo(id) {
-                            Some(todo) => todo.print(),
+                            Some(todo) => println!("{todo}"),
                             None => println!("Todo not found!"),
                         }
                     }
@@ -273,7 +279,7 @@ fn main() {
                 if let Some(id_str) = s.strip_prefix("d ") {
                     if let Ok(id) = id_str.parse::<u64>() {
                         match app.delete_todo(id) {
-                            Some(todo) => todo.print(),
+                            Some(todo) => println!("{todo}"),
                             None => println!("Todo not found!"),
                         }
                     }
